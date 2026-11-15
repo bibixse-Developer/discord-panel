@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Panel Bot Discord</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #36393f;
+            color: #dcddde;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px 0;
+        }
+        .container {
+            background-color: #2f3136;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            width: 450px;
+            max-width: 90%;
+        }
+        h2 { text-align: center; color: #ffffff; margin-top: 0; }
+        label { display: block; margin-top: 15px; font-weight: bold; font-size: 14px; }
+        textarea, select, input[type="text"], input[type="color"] {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            background-color: #40444b;
+            border: 1px solid #202225;
+            color: #ffffff;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea { height: 80px; resize: vertical; }
+        .section-box {
+            background: #202225;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+            border: 1px solid #2f3136;
+        }
+        .section-title { font-weight: bold; color: #7289da; margin-bottom: 5px; font-size: 14px; }
+        button {
+            width: 100%;
+            background-color: #5865f2;
+            color: white;
+            padding: 12px;
+            border: none;
+            border-radius: 4px;
+            margin-top: 20px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background-color: #4752c4; }
+        #status { margin-top: 15px; text-align: center; font-size: 14px; }
+        small { color: #a3a6aa; font-size: 12px; display: block; margin-top: 4px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Panel Kontrol Bot Discord</h2>
+        
+        <form id="botForm">
+            <label for="serverSelect">Pilih Server:</label>
+            <select id="serverSelect" required>
+                <option value="">Memuat daftar server...</option>
+            </select>
+
+            <label for="channelSelect">Pilih Channel:</label>
+            <select id="channelSelect" required>
+                <option value="">Pilih server dulu</option>
+            </select>
+
+            <label for="message">Pesan Utama (Bisa Tag @username / @role):</label>
+            <textarea id="message" placeholder="Halo @budi, cek pengumuman dari @Admin ya!"></textarea>
+            <small>Ketik <b>@username</b> atau <b>@namarole</b> langsung, sistem akan otomatis mengubahnya jadi mention asli.</small>
+
+            <div class="section-box">
+                <div class="section-title">Fitur Embed (Emblem Kotak)</div>
+                
+                <label for="embedTitle" style="margin-top:5px;">Judul Embed:</label>
+                <input type="text" id="embedTitle" placeholder="Judul kotak embed...">
+
+                <label for="embedDesc">Deskripsi Embed:</label>
+                <textarea id="embedDesc" placeholder="Isi teks di dalam kotak embed (mendukung **tebal**, *miring*, dll)..."></textarea>
+
+                <label for="embedColor">Warna Garis Samping Embed:</label>
+                <input type="color" id="embedColor" value="#5865f2" style="height: 40px; cursor: pointer;">
+            </div>
+
+            <button type="submit">Kirim Pesan via Bot</button>
+        </form>
+
+        <div id="status"></div>
+    </div>
+
+    <script>
+        let guildsData = [];
+        const serverSelect = document.getElementById('serverSelect');
+        const channelSelect = document.getElementById('channelSelect');
+        const statusDiv = document.getElementById('status');
+
+        // Muat daftar server dari backend saat halaman dibuka
+        async function loadServers() {
+            try {
+                const res = await fetch('http://localhost:3000/api/guilds');
+                guildsData = await res.json();
+
+                serverSelect.innerHTML = '<option value="">-- Pilih Server --</option>';
+                guildsData.forEach(guild => {
+                    const opt = document.createElement('option');
+                    opt.value = guild.id;
+                    opt.textContent = guild.name;
+                    serverSelect.appendChild(opt);
+                });
+            } catch (err) {
+                serverSelect.innerHTML = '<option value="">Gagal terhubung ke bot.js</option>';
+                statusDiv.style.color = '#f04747';
+                statusDiv.textContent = 'Pastikan terminal "node bot.js" sudah dijalankan!';
+            }
+        }
+
+        // Update daftar channel saat server dipilih
+        serverSelect.addEventListener('change', () => {
+            const selectedGuild = guildsData.find(g => g.id === serverSelect.value);
+            channelSelect.innerHTML = '';
+
+            if (selectedGuild && selectedGuild.channels.length > 0) {
+                selectedGuild.channels.forEach(ch => {
+                    const opt = document.createElement('option');
+                    opt.value = ch.id;
+                    opt.textContent = `# ${ch.name}`;
+                    channelSelect.appendChild(opt);
+                });
+            } else {
+                channelSelect.innerHTML = '<option value="">Tidak ada channel teks</option>';
+            }
+        });
+
+        // Kirim pesan saat form di-submit
+        document.getElementById('botForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            statusDiv.style.color = '#b9bbbe';
+            statusDiv.textContent = 'Mengirim pesan...';
+
+            const bodyData = {
+                guildId: serverSelect.value,
+                channelId: channelSelect.value,
+                message: document.getElementById('message').value,
+                embedTitle: document.getElementById('embedTitle').value,
+                embedDesc: document.getElementById('embedDesc').value,
+                embedColor: document.getElementById('embedColor').value
+            };
+
+            try {
+                const res = await fetch('http://localhost:3000/api/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(bodyData)
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    statusDiv.style.color = '#43b581';
+                    statusDiv.textContent = 'Pesan berhasil dikirim!';
+                    document.getElementById('message').value = '';
+                    document.getElementById('embedTitle').value = '';
+                    document.getElementById('embedDesc').value = '';
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (err) {
+                statusDiv.style.color = '#f04747';
+                statusDiv.textContent = 'Gagal mengirim: ' + err.message;
+            }
+        });
+
+        loadServers();
+    </script>
+</body>
+</html>
